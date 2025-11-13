@@ -475,6 +475,93 @@ if 'df' in st.session_state:
         )
         st.plotly_chart(fig, use_container_width=True)
     
+    with tab6:
+        st.subheader("💡 AI 기반 비판적 해석 및 행동 추천")
+        st.markdown("**기능**: 데이터 분석 결과를 토대로 비판적 해석과 실행 가능한 행동 방안을 제시합니다.")
+        
+        # 분석 유형 선택
+        analysis_type = st.radio("분석 유형 선택", ["📊 반 전체 분석", "👤 개인별 분석"], horizontal=True)
+        
+        if analysis_type == "👤 개인별 분석":
+            if '이름' in df_filtered.columns:
+                selected_student = st.selectbox("분석할 학생 선택", df_filtered['이름'].values)
+                analysis = analyze_grades(df_filtered, score_cols, selected_student)
+            else:
+                st.warning("이름 컬럼이 없어 개인별 분석이 불가능합니다.")
+                analysis = None
+        else:
+            analysis = analyze_grades(df_filtered, score_cols)
+        
+        if analysis:
+            # ========== 비판적 해석 섹션 ==========
+            st.markdown("### 📌 비판적 해석")
+            insights = generate_insights(analysis)
+            for insight in insights:
+                st.markdown(f'<div class="insight-box">{insight}</div>', unsafe_allow_html=True)
+            
+            # ========== 행동 추천 섹션 ==========
+            st.markdown("### 🎯 행동 연결 추천")
+            recommendations = generate_recommendations(analysis, df_filtered, score_cols)
+            
+            for i, rec in enumerate(recommendations, 1):
+                with st.expander(f"#{i}. {rec['title']}", expanded=(i==1)):
+                    for action in rec['actions']:
+                        st.markdown(f'<div class="recommendation-box">✓ {action}</div>', unsafe_allow_html=True)
+            
+            # ========== 데이터 기반 통계 ==========
+            st.markdown("### 📊 참고 통계")
+            col1, col2, col3 = st.columns(3)
+            
+            if analysis['type'] == '개인':
+                with col1:
+                    st.metric("개인 평균", f"{analysis['avg']:.1f}", delta=f"{analysis['avg'] - analysis['class_avg']:+.1f}")
+                with col2:
+                    st.metric("반 평균", f"{analysis['class_avg']:.1f}")
+                with col3:
+                    st.metric("상위 백분위", f"{analysis['percentile']:.0f}%")
+            else:
+                with col1:
+                    st.metric("반 평균", f"{analysis['avg']:.1f}")
+                with col2:
+                    st.metric("표준편차", f"{analysis['std']:.2f}")
+                with col3:
+                    st.metric("학력 격차", f"{analysis['best_avg'] - analysis['worst_avg']:.1f}")
+            
+            # ========== 시각적 요약 ==========
+            st.markdown("### 📈 점수 분포 시각화")
+            if analysis['type'] == '개인':
+                # 개인별 레이더 차트 (이미 tab4에서 표시하므로, 여기서는 간단한 요약)
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=list(analysis['scores'].keys()),
+                    y=list(analysis['scores'].values()),
+                    name='개인 성적',
+                    marker_color='#1f77b4'
+                ))
+                fig.add_hline(y=analysis['class_avg'], line_dash="dash", line_color="red", annotation_text=f"반 평균: {analysis['class_avg']:.1f}")
+                fig.update_layout(
+                    title=f"{analysis['name']} 학생 - 과목별 성적 비교",
+                    xaxis_title="과목",
+                    yaxis_title="점수",
+                    height=400
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                # 반 전체 과목별 평균
+                subjects = list(analysis['scores_by_subject'].keys())
+                scores = list(analysis['scores_by_subject'].values())
+                
+                fig = px.bar(
+                    x=subjects,
+                    y=scores,
+                    title="반 전체 - 과목별 평균 성적",
+                    labels={'y': '점수', 'x': '과목'},
+                    color=scores,
+                    color_continuous_scale='RdYlGn'
+                )
+                fig.add_hline(y=analysis['avg'], line_dash="dash", line_color="blue", annotation_text=f"전체 평균: {analysis['avg']:.1f}")
+                st.plotly_chart(fig, use_container_width=True)
+    
     # ==================== 데이터 다운로드 ====================
     st.header("4️⃣ 데이터 다운로드")
     
